@@ -1,0 +1,29 @@
+{
+  "name": "cpccu",
+  "version": "1.0.0",
+  "description": "this is the project for our competitive programming camp city university",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
+    "test": "test"
+  },
+  "keywords": [
+    "express",
+    "node",
+    "mongoose"
+  ],
+  "author": "Rahul Roy Nipon",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.4",
+    "prettier": "^3.3.2"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mongoose": "^8.4.4"
+  }
+}
