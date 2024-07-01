@@ -3,7 +3,31 @@ import { ApiError } from "./../utils/ApiError.js";
 import { ApiResponse } from "./../utils/ApiResponse.js";
 import { User } from "./../models/user.model.js";
 import { uploadOnCloudinary } from "./../utils/cloudinary.js";
+import jwt from "jsonwebtoken";
 import fs from "fs";
+
+const generateAccessAndRefreshToken = async (userID) => {
+    try {
+        const user = await User.findById(userID);
+        const accessToken = user.generateAccessToken();
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        user.save({ validateBeforeSave: false });
+
+        return { accessToken, refreshToken };
+    } catch (error) {
+        throw new ApiError(
+            500,
+            "Something went wrong while generation refresh or access token"
+        );
+    }
+};
+
+const options = {
+    httpOnly: true,
+    secure: true,
+};
 
 const registerUser = asyncHandler(async (req, res) => {
     const { username, email, fullname, password, batch, uni_id } = req.body;
@@ -72,4 +96,50 @@ const registerUser = asyncHandler(async (req, res) => {
         );
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+    const { username, email, password } = req.body;
+
+    if (!username && !email) {
+        throw new ApiError(400, "Username or email is required");
+    }
+
+    const user = await User.findOne({
+        $or: [{ username }, { email }],
+    });
+
+    if (!user) {
+        throw new ApiError(404, "User is not existed");
+    }
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+
+    if (!isPasswordValid) {
+        throw new ApiError(401, "Wrong password");
+    }
+
+    const { refreshToken, accessToken } = await generateAccessAndRefreshToken(
+        user?._id
+    );
+
+    const loggedInUser = await User.findById(user?._id).select(
+        "-password -refreshToken"
+    );
+
+    return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", refreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                {
+                    user: loggedInUser,
+                    accessToken,
+                    refreshToken,
+                },
+                "User logged In Successfully"
+            )
+        );
+});
+
+export { registerUser, loginUser };
