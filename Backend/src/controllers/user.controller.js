@@ -4,6 +4,7 @@ import { ApiResponse } from "./../utils/ApiResponse.js";
 import { User } from "./../models/user.model.js";
 import { uploadOnCloudinary } from "./../utils/cloudinary.js";
 import fs from "fs";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userID) => {
     try {
@@ -39,40 +40,19 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All fields are required");
     }
 
-    const avatarLocalPath = req.files?.avatar?.[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
-
     const existedUser = await User.findOne({
         $or: [{ username }, { email }],
     });
 
     if (existedUser) {
-        if (fs.existsSync(avatarLocalPath)) {
-            fs.unlinkSync(avatarLocalPath);
-        }
-        if (fs.existsSync(coverImageLocalPath)) {
-            fs.unlinkSync(coverImageLocalPath);
-        }
-
         throw new ApiError(409, "User with email or username already exists");
     }
-
-    if (!avatarLocalPath) {
-        throw new ApiError(400, "Avatar is required");
-    }
-
-    const avatar = await uploadOnCloudinary(avatarLocalPath);
-    const coverImage = coverImageLocalPath
-        ? await uploadOnCloudinary(coverImageLocalPath)
-        : null;
 
     const user = await User.create({
         username: username.toLowerCase(),
         email,
         fullname,
         password,
-        avatar: avatar.url,
-        coverImage: coverImage?.url || "",
         batch,
         uni_id,
     });
@@ -161,4 +141,45 @@ const logoutUser = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 
-export { registerUser, loginUser, logoutUser };
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    const incomingRefreshToken =
+        req.cookies.refreshToken || req.body.refreshToken;
+
+    if (!incomingRefreshToken) {
+        throw new ApiError(401, "Unauthorized request");
+    }
+
+    try {
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SCRECT
+        );
+
+        const user = await User.findById(decodedToken?._id);
+
+        if (!user) {
+            throw new ApiError(401, "Invalid refresh token");
+        }
+
+        const accessToken = await user.generateAccessToken(user._id);
+        const refreshToken = user.refreshToken;
+
+        return res
+            .status(200)
+            .cookie("accessToken", accessToken, options)
+            .cookie("refreshToken", refreshToken, options)
+            .json(
+                new ApiResponse(
+                    200,
+                    { accessToken, refreshToken },
+                    "Access token refreshed"
+                )
+            );
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid refresh token");
+    }
+});
+
+// update controller start from here
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken };

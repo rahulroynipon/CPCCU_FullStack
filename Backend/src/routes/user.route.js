@@ -3,6 +3,7 @@ import { upload } from "./../middlewares/upload.middleware.js";
 import {
     loginUser,
     logoutUser,
+    refreshAccessToken,
     registerUser,
 } from "../controllers/user.controller.js";
 import { verifyToken } from "../middlewares/Auth.middleware.js";
@@ -24,6 +25,7 @@ router.route("/register").post(
 );
 
 router.route("/login").post(loginUser);
+router.route("/refresh-token").post(refreshAccessToken);
 
 // secure route start from here
 router.route("/logout").post(verifyToken, logoutUser);

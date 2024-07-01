@@ -6,7 +6,7 @@ const roleSchema = new Schema(
     {
         role: {
             type: String,
-            enum: ["admin", "moderator", "member"],
+            enum: ["admin", "moderator", "mentor", "member"],
             required: true,
         },
         position: {
@@ -50,7 +50,6 @@ const userSchema = new Schema(
         },
         avatar: {
             type: String,
-            required: true,
         },
         coverImage: {
             type: String,
