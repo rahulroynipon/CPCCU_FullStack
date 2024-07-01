@@ -181,5 +181,83 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 });
 
 // update controller start from here
+const updateAvatar = asyncHandler(async (req, res) => {
+    const avatarLocalPath = req.file?.path;
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+    if (!avatarLocalPath) {
+        throw new ApiError(400, "Avatar image file is missing");
+    }
+
+    const avatarImage = await uploadOnCloudinary(avatarLocalPath);
+
+    if (!avatarImage.url) {
+        throw new ApiError(400, "Error while uploading avatar");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                avatar: avatarImage.url,
+            },
+        },
+        {
+            new: true,
+        }
+    ).select("-password -refreshToken");
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Avatar image updated successfully"));
+});
+
+const updateCoverImage = asyncHandler(async (req, res) => {
+    const coverImageLocalPath = req.file?.path;
+
+    if (!coverImageLocalPath) {
+        throw new ApiError(400, "Cover image file is missing");
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
+    if (!coverImage.url) {
+        throw new ApiError(400, "Error while uploading cover image");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                coverImage: coverImage.url,
+            },
+        },
+        {
+            new: true,
+        }
+    ).select("-password -refreshToken");
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, user, "Cover image updated successfully"));
+});
+
+// public data controller start from here
+const getAllMember = asyncHandler(async (req, res) => {
+    const allMember = await User.find({
+        "roles.position": 0,
+    }).select("-password -refreshToken");
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, allMember, "All general member info"));
+});
+
+export {
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    updateAvatar,
+    updateCoverImage,
+    getAllMember,
+};

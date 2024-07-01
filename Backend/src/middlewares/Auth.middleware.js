@@ -24,7 +24,7 @@ const verifyToken = asyncHandler(async (req, res, next) => {
             throw new ApiError(401, "invalid Access Token");
         }
 
-        res.user = existedUser;
+        req.user = existedUser;
         next();
     } catch (error) {
         throw new ApiError(401, error?.message || "Invalid access token");
