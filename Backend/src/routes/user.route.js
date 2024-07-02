@@ -4,6 +4,7 @@ import {
     getAllCommittee,
     getAllMember,
     getAllMentor,
+    getUserID,
     loginUser,
     logoutUser,
     refreshAccessToken,
@@ -45,5 +46,8 @@ router
 router.route("/all-member").get(getAllMember);
 router.route("/committee-member").get(getAllCommittee);
 router.route("/all-mentor").get(getAllMentor);
+
+// search public user
+router.route("/:username").get(getUserID);
 
 export default router;

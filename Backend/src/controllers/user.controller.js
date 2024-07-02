@@ -242,6 +242,26 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 });
 
 // public data controller start from here
+const getUserID = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+
+    if (!username) {
+        throw new ApiError(400, "Username is required");
+    }
+
+    const existedUser = await User.findOne({ username }).select(
+        "-password -refreshToken"
+    );
+
+    if (!existedUser) {
+        throw new ApiError(404, "User does not exist");
+    }
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, existedUser, "User found"));
+});
+
 const getAllMember = asyncHandler(async (req, res) => {
     const allMember = await User.find({
         "roles.position": 0,
@@ -288,4 +308,5 @@ export {
     getAllMember,
     getAllCommittee,
     getAllMentor,
+    getUserID,
 };
