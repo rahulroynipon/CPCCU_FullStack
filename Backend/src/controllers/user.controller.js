@@ -252,6 +252,32 @@ const getAllMember = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, allMember, "All general member info"));
 });
 
+const getAllCommittee = asyncHandler(async (req, res) => {
+    const committeeMember = await User.find({
+        "roles.position": { $gt: 0 },
+    })
+        .sort({ "roles.position": 1 })
+        .select("-password -refreshToken");
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, committeeMember, "all committee member info")
+        );
+});
+
+const getAllMentor = asyncHandler(async (req, res) => {
+    const allMentor = await User.find({
+        "roles.position": { $lt: 0 },
+    })
+        .sort({ "roles.position": -1 })
+        .select("-password -refreshToken");
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, allMentor, "All mentor info"));
+});
+
 export {
     registerUser,
     loginUser,
@@ -260,4 +286,6 @@ export {
     updateAvatar,
     updateCoverImage,
     getAllMember,
+    getAllCommittee,
+    getAllMentor,
 };

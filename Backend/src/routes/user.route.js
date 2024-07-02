@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { upload } from "./../middlewares/upload.middleware.js";
 import {
+    getAllCommittee,
     getAllMember,
+    getAllMentor,
     loginUser,
     logoutUser,
     refreshAccessToken,
@@ -41,4 +43,7 @@ router
 
 // get public data start from here
 router.route("/all-member").get(getAllMember);
+router.route("/committee-member").get(getAllCommittee);
+router.route("/all-mentor").get(getAllMentor);
+
 export default router;
