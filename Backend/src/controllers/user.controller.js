@@ -3,7 +3,6 @@ import { ApiError } from "./../utils/ApiError.js";
 import { ApiResponse } from "./../utils/ApiResponse.js";
 import { User } from "./../models/user.model.js";
 import { uploadOnCloudinary } from "./../utils/cloudinary.js";
-import fs from "fs";
 import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userID) => {
@@ -182,7 +181,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-// secure update controller start from here
+// update controller start from here
 const updateAvatar = asyncHandler(async (req, res) => {
     const avatarLocalPath = req.file?.path;
 
@@ -242,6 +241,7 @@ const updateCoverImage = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, user, "Cover image updated successfully"));
 });
+// update controller end here
 
 // public data controller start from here
 const getUserID = asyncHandler(async (req, res) => {
@@ -300,7 +300,46 @@ const getAllMentor = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, allMentor, "All mentor info"));
 });
 
-// public data controller end here
+const getProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+
+    if (!username?.trim()) {
+        throw new ApiError(400, "username is missing");
+    }
+
+    const profile = await User.aggregate([
+        {
+            $match: {
+                username: username.toLowerCase(),
+            },
+        },
+        {
+            $lookup: {
+                from: "blogs",
+                localField: "_id",
+                foreignField: "owner",
+                as: "personalBlogs",
+            },
+        },
+        {
+            $project: {
+                username: 1,
+                email: 1,
+                fullname: 1,
+                avatar: 1,
+                coverImage: 1,
+                uni_id: 1,
+                batch: 1,
+                personalBlogs: 1,
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, profile[0], "profile data"));
+});
+// public data controller start from here
 
 export {
     registerUser,
@@ -313,4 +352,5 @@ export {
     getAllCommittee,
     getAllMentor,
     getUserID,
+    getProfile,
 };

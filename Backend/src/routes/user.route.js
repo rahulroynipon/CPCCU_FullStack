@@ -4,6 +4,7 @@ import {
     getAllCommittee,
     getAllMember,
     getAllMentor,
+    getProfile,
     getUserID,
     loginUser,
     logoutUser,
@@ -43,11 +44,11 @@ router
     .patch(verifyToken, upload.single("coverImage"), updateCoverImage);
 
 // get public data start from here
-router.route("/all-member").get(getAllMember);
-router.route("/committee-member").get(getAllCommittee);
-router.route("/all-mentor").get(getAllMentor);
-
+router.route("/").get(getAllMember);
 // search public user
 router.route("/:username").get(getUserID);
+router.route("/profile/:username").get(getProfile);
+router.route("/committee-member").get(getAllCommittee);
+router.route("/all-mentor").get(getAllMentor);
 
 export default router;
