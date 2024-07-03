@@ -53,6 +53,8 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
         fullname,
         password,
+        avatar: "",
+        coverImage: "",
         batch,
         uni_id,
     });
@@ -180,7 +182,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-// update controller start from here
+// secure update controller start from here
 const updateAvatar = asyncHandler(async (req, res) => {
     const avatarLocalPath = req.file?.path;
 
@@ -297,6 +299,8 @@ const getAllMentor = asyncHandler(async (req, res) => {
         .status(200)
         .json(new ApiResponse(200, allMentor, "All mentor info"));
 });
+
+// public data controller end here
 
 export {
     registerUser,

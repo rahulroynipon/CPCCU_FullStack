@@ -1,14 +1,18 @@
-import mongoose, { Schema, model } from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const commentSchema = new Schema(
     {
         owner: {
             type: Schema.Types.ObjectId,
-            ref: User,
+            ref: "User",
         },
         content: {
             type: String,
             required: true,
+        },
+        blog: {
+            type: Schema.Types.ObjectId,
+            ref: "Blog",
         },
     },
     { timestamps: true }
