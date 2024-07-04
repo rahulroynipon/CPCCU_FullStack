@@ -67,9 +67,7 @@ const deleteBlog = asyncHandler(async (req, res) => {
 
         return res
             .status(200)
-            .json(
-                new ApiResponse(200, deletedBlog, "Blog deleted successfully")
-            );
+            .json(new ApiResponse(200, {}, "Blog deleted successfully"));
     } catch (error) {
         console.error("Error deleting blog:", error); // Logging the error for debugging
         throw new ApiError(

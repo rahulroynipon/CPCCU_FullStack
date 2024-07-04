@@ -3,6 +3,7 @@ import { upload } from "./../middlewares/upload.middleware.js";
 import {
     getMember,
     getProfile,
+    getUserInfo,
     loginUser,
     logoutUser,
     refreshAccessToken,
@@ -40,9 +41,9 @@ router
     .route("/update-cover")
     .patch(verifyToken, upload.single("coverImage"), updateCoverImage);
 
+router.route("/").get(verifyToken, getProfile);
 // get public data start from here
-router.route("/").get(getMember);
-
-router.route("/profile").get(verifyToken, getProfile);
+router.route("/info").get(getMember);
+router.route("/profile").get(getUserInfo);
 
 export default router;

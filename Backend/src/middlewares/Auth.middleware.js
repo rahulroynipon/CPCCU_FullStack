@@ -18,7 +18,9 @@ const verifyToken = asyncHandler(async (req, res, next) => {
             process.env.ACCESS_TOKEN_SCRECT
         );
 
-        const existedUser = await User.findById(decodededToken?._id);
+        const existedUser = await User.findById(decodededToken?._id).select(
+            "-password"
+        );
 
         if (!existedUser) {
             throw new ApiError(401, "invalid Access Token");

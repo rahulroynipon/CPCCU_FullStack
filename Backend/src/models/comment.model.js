@@ -2,6 +2,10 @@ import mongoose, { Schema } from "mongoose";
 
 const commentSchema = new Schema(
     {
+        blog: {
+            type: Schema.Types.ObjectId,
+            ref: "Blog",
+        },
         owner: {
             type: Schema.Types.ObjectId,
             ref: "User",
@@ -9,10 +13,6 @@ const commentSchema = new Schema(
         content: {
             type: String,
             required: true,
-        },
-        blog: {
-            type: Schema.Types.ObjectId,
-            ref: "Blog",
         },
     },
     { timestamps: true }

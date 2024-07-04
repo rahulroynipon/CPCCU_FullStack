@@ -24,6 +24,53 @@ const generateAccessAndRefreshToken = async (userID) => {
     }
 };
 
+const userDataCollection = async (username, userId) => {
+    let query = {};
+
+    if (username && typeof username === "string") {
+        query.username = username.toLowerCase();
+    }
+
+    if (
+        userId &&
+        (typeof userId === "string" || mongoose.Types.ObjectId.isValid(userId))
+    ) {
+        if (mongoose.Types.ObjectId.isValid(userId)) {
+            query._id = new mongoose.Types.ObjectId(userId);
+        } else {
+            query._id = userId;
+        }
+    }
+
+    const profile = await User.aggregate([
+        {
+            $match: query,
+        },
+        {
+            $lookup: {
+                from: "blogs",
+                localField: "_id",
+                foreignField: "owner",
+                as: "personalBlogs",
+            },
+        },
+        {
+            $project: {
+                username: 1,
+                email: 1,
+                fullname: 1,
+                avatar: 1,
+                coverImage: 1,
+                uni_id: 1,
+                batch: 1,
+                personalBlogs: 1,
+            },
+        },
+    ]);
+
+    return profile;
+};
+
 const options = {
     httpOnly: true,
     secure: true,
@@ -302,7 +349,7 @@ const getMember = asyncHandler(async (req, res) => {
     }
 });
 
-const getProfile = asyncHandler(async (req, res) => {
+const getUserInfo = asyncHandler(async (req, res) => {
     const { username, id } = req.query;
 
     if (!username && !id) {
@@ -312,45 +359,26 @@ const getProfile = asyncHandler(async (req, res) => {
         );
     }
 
-    let query = {};
+    const profile = await userDataCollection(username, id);
 
-    if (username) {
-        query.username = username.toLowerCase().trim();
+    if (!profile || profile.length === 0) {
+        throw new ApiError(404, "Profile not found");
     }
 
-    if (id) {
-        if (mongoose.Types.ObjectId.isValid(id.trim())) {
-            query._id = new mongoose.Types.ObjectId(id.trim());
-        } else {
-            query._id = id.trim();
-        }
-    }
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                profile[0],
+                "Profile data retrieved successfully"
+            )
+        );
+});
 
-    const profile = await User.aggregate([
-        {
-            $match: query,
-        },
-        {
-            $lookup: {
-                from: "blogs",
-                localField: "_id",
-                foreignField: "owner",
-                as: "personalBlogs",
-            },
-        },
-        {
-            $project: {
-                username: 1,
-                email: 1,
-                fullname: 1,
-                avatar: 1,
-                coverImage: 1,
-                uni_id: 1,
-                batch: 1,
-                personalBlogs: 1,
-            },
-        },
-    ]);
+const getProfile = asyncHandler(async (req, res) => {
+    // Fetch profile data using userDataCollection function
+    const profile = await userDataCollection(req.user?.username, req.user?._id);
 
     if (!profile || profile.length === 0) {
         throw new ApiError(404, "Profile not found");
@@ -376,6 +404,7 @@ export {
     refreshAccessToken,
     updateAvatar,
     updateCoverImage,
-    getProfile,
+    getUserInfo,
     getMember,
+    getProfile,
 };
