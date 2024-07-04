@@ -43,7 +43,6 @@ router
 // get public data start from here
 router.route("/").get(getMember);
 
-// search public user
-router.route("/profile").get(getProfile);
+router.route("/profile").get(verifyToken, getProfile);
 
 export default router;

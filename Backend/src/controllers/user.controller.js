@@ -256,7 +256,7 @@ const getMember = asyncHandler(async (req, res) => {
 
         const roles = ["admin", "moderator", "mentor", "member"];
         const userRole = role.trim();
-        if (!roles.includes(userRole)) {
+        if (!roles.includes(userRole) && userRole != "all") {
             throw new ApiError(400, "Invalid role provided");
         }
 
