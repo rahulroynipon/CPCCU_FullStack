@@ -3,6 +3,7 @@ import { ApiError } from "./../utils/ApiError.js";
 import { ApiResponse } from "./../utils/ApiResponse.js";
 import { User } from "./../models/user.model.js";
 import { uploadOnCloudinary } from "./../utils/cloudinary.js";
+import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshToken = async (userID) => {
@@ -244,74 +245,90 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 // update controller end here
 
 // public data controller start from here
-const getUserID = asyncHandler(async (req, res) => {
-    const { username } = req.params;
 
-    if (!username) {
-        throw new ApiError(400, "Username is required");
+const getMember = asyncHandler(async (req, res) => {
+    try {
+        const { role } = req.query;
+
+        if (!role) {
+            throw new ApiError(400, "Role query parameter is required");
+        }
+
+        const roles = ["admin", "moderator", "mentor", "member"];
+        const userRole = role.trim();
+        if (!roles.includes(userRole)) {
+            throw new ApiError(400, "Invalid role provided");
+        }
+
+        const selected = "username fullname email avatar roles";
+        let search = [{ "roles.role": userRole }];
+        let member = [];
+
+        if (userRole == "moderator") {
+            search = [{ "roles.role": "admin" }, { "roles.role": "moderator" }];
+        }
+
+        if (userRole == "moderator") {
+            member = await User.find({
+                $or: search,
+            })
+                .select(selected)
+                .sort({ "roles.position": 1 });
+        } else if (userRole == "mentor") {
+            member = await User.find({
+                $or: search,
+            })
+                .select(selected)
+                .sort({ "roles.position": -1 });
+        } else if (userRole == "all") {
+            member = await User.find().select(selected);
+        } else {
+            member = await User.find({
+                $or: search,
+            }).select(selected);
+        }
+
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    member,
+                    `${role} data retrieved successfully`
+                )
+            );
+    } catch (error) {
+        throw new ApiError(500, "Failed to fetch member data");
     }
-
-    const existedUser = await User.findOne({ username }).select(
-        "-password -refreshToken"
-    );
-
-    if (!existedUser) {
-        throw new ApiError(404, "User does not exist");
-    }
-
-    return res
-        .status(200)
-        .json(new ApiResponse(200, existedUser, "User found"));
-});
-
-const getAllMember = asyncHandler(async (req, res) => {
-    const allMember = await User.find({
-        "roles.position": 0,
-    }).select("-password -refreshToken");
-
-    return res
-        .status(200)
-        .json(new ApiResponse(200, allMember, "All general member info"));
-});
-
-const getAllCommittee = asyncHandler(async (req, res) => {
-    const committeeMember = await User.find({
-        "roles.position": { $gt: 0 },
-    })
-        .sort({ "roles.position": 1 })
-        .select("-password -refreshToken");
-
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(200, committeeMember, "all committee member info")
-        );
-});
-
-const getAllMentor = asyncHandler(async (req, res) => {
-    const allMentor = await User.find({
-        "roles.position": { $lt: 0 },
-    })
-        .sort({ "roles.position": -1 })
-        .select("-password -refreshToken");
-
-    return res
-        .status(200)
-        .json(new ApiResponse(200, allMentor, "All mentor info"));
 });
 
 const getProfile = asyncHandler(async (req, res) => {
-    const { username } = req.params;
+    const { username, id } = req.query;
 
-    if (!username?.trim()) {
-        throw new ApiError(400, "username is missing");
+    if (!username && !id) {
+        throw new ApiError(
+            400,
+            "Either username or id query parameter is required"
+        );
+    }
+
+    let query = {};
+
+    if (username) {
+        query.username = username.toLowerCase().trim();
+    }
+
+    if (id) {
+        if (mongoose.Types.ObjectId.isValid(id.trim())) {
+            query._id = new mongoose.Types.ObjectId(id.trim());
+        } else {
+            query._id = id.trim();
+        }
     }
 
     const profile = await User.aggregate([
         {
-            $match: {
-                username: username.toLowerCase(),
-            },
+            $match: query,
         },
         {
             $lookup: {
@@ -335,10 +352,21 @@ const getProfile = asyncHandler(async (req, res) => {
         },
     ]);
 
+    if (!profile || profile.length === 0) {
+        throw new ApiError(404, "Profile not found");
+    }
+
     return res
         .status(200)
-        .json(new ApiResponse(200, profile[0], "profile data"));
+        .json(
+            new ApiResponse(
+                200,
+                profile[0],
+                "Profile data retrieved successfully"
+            )
+        );
 });
+
 // public data controller start from here
 
 export {
@@ -348,9 +376,6 @@ export {
     refreshAccessToken,
     updateAvatar,
     updateCoverImage,
-    getAllMember,
-    getAllCommittee,
-    getAllMentor,
-    getUserID,
     getProfile,
+    getMember,
 };

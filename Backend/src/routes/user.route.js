@@ -1,11 +1,8 @@
 import { Router } from "express";
 import { upload } from "./../middlewares/upload.middleware.js";
 import {
-    getAllCommittee,
-    getAllMember,
-    getAllMentor,
+    getMember,
     getProfile,
-    getUserID,
     loginUser,
     logoutUser,
     refreshAccessToken,
@@ -44,11 +41,9 @@ router
     .patch(verifyToken, upload.single("coverImage"), updateCoverImage);
 
 // get public data start from here
-router.route("/").get(getAllMember);
+router.route("/").get(getMember);
+
 // search public user
-router.route("/:username").get(getUserID);
-router.route("/profile/:username").get(getProfile);
-router.route("/committee-member").get(getAllCommittee);
-router.route("/all-mentor").get(getAllMentor);
+router.route("/profile").get(getProfile);
 
 export default router;

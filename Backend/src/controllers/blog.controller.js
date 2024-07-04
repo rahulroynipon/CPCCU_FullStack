@@ -3,7 +3,6 @@ import { Blog } from "../models/blog.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { User } from "../models/user.model.js";
 
 const createBlog = asyncHandler(async (req, res) => {
     const { content } = req.body;
@@ -26,13 +25,56 @@ const createBlog = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, blog, "Blog is created successfully"));
 });
 
-const getAllBlog = asyncHandler(async (req, res) => {
-    const blogs = await Blog.find({}).populate({
-        path: "owner",
-        select: "username fullname avatar ",
-    });
+const getBlog = asyncHandler(async (req, res) => {
+    try {
+        const { role } = req.query;
 
-    return res.status(200).json(new ApiResponse(200, blogs, "all the blogs"));
+        if (!role) {
+            throw new ApiError(400, "Role query parameter is required");
+        }
+
+        const roles = ["admin", "moderator", "mentor", "member"];
+        const userRole = role.trim();
+        if (!roles.includes(userRole)) {
+            throw new ApiError(400, "Invalid role provided");
+        }
+
+        let blogs = [];
+        let search = [{ "roles.role": userRole }];
+        const selected = "username fullname avatar";
+
+        if (userRole == "moderator") {
+            search = [{ "roles.role": "admin" }, { "roles.role": "moderator" }];
+        }
+
+        if (userRole == "all") {
+            blogs = await Blog.find()
+                .populate({
+                    path: "owner",
+                    select: selected,
+                })
+                .sort({ createdAt: -1 });
+        } else {
+            blogs = await Blog.find()
+                .populate({
+                    path: "owner",
+                    match: { $or: search },
+                    select: selected,
+                })
+                .sort({ createdAt: -1 });
+            blogs = blogs.filter((blog) => blog.owner !== null);
+        }
+
+        res.status(200).json(
+            new ApiResponse(
+                200,
+                blogs,
+                `${role ? role : "All"} blogs retrieved successfully`
+            )
+        );
+    } catch (error) {
+        res.status(500).json(new ApiError(500, "Failed to fetch blogs"));
+    }
 });
 
-export { createBlog, getAllBlog };
+export { createBlog, getBlog };
