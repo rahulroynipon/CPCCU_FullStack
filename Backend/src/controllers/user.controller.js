@@ -5,6 +5,8 @@ import { User } from "./../models/user.model.js";
 import { uploadOnCloudinary } from "./../utils/cloudinary.js";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
+import { Blog } from "../models/blog.model.js";
+import { Comment } from "../models/comment.model.js";
 
 const generateAccessAndRefreshToken = async (userID) => {
     try {
@@ -499,7 +501,157 @@ const getProfile = asyncHandler(async (req, res) => {
         );
 });
 
-// public data controller start from here
+// admin and moderator controller start from here
+
+const changeRole = asyncHandler(async (req, res) => {
+    const { change } = req.query;
+    const { id, value } = req.body;
+
+    if (!change || !id || !value) {
+        throw new ApiError(400, "query, id, and value are required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id.trim())) {
+        throw new ApiError(400, "invalid id");
+    }
+
+    const existedUser = await User.findById(id.trim());
+
+    if (!existedUser) {
+        throw new ApiError(404, "user not found");
+    }
+
+    let updateValue = value.trim();
+
+    switch (change.trim()) {
+        case "role": {
+            if (
+                !["admin", "moderator", "mentor", "member"].includes(
+                    updateValue
+                )
+            ) {
+                throw new ApiError(401, "invalid role");
+            }
+            break;
+        }
+
+        case "position": {
+            const x = Number(updateValue);
+            if (isNaN(x)) {
+                throw new ApiError(401, "invalid position");
+            }
+            updateValue = x;
+            break;
+        }
+
+        case "positionName": {
+            // Add any additional validation if necessary
+            break;
+        }
+
+        default:
+            throw new ApiError(400, "invalid change type");
+    }
+
+    const updateUser = await User.findByIdAndUpdate(
+        id.trim(),
+        { $set: { [`roles.${change.trim()}`]: updateValue } },
+        { new: true }
+    ).select("username roles");
+
+    if (!updateUser) {
+        throw new ApiError(500, "failed to update user");
+    }
+
+    res.status(200).json(
+        new ApiResponse(
+            200,
+            updateUser,
+            `${change.trim()} changed successfully`
+        )
+    );
+});
+
+const deleteUser = asyncHandler(async (req, res) => {
+    const { id } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(id.trim())) {
+        throw new ApiError(400, "Invalid ID");
+    }
+
+    const existedUser = await User.findById(id.trim());
+
+    if (!existedUser) {
+        throw new ApiError(404, "User not found");
+    }
+
+    try {
+        // Find all blogs owned by the user
+        const allBlogs = await Blog.find({ owner: id.trim() }).select("_id");
+        const blogIds = allBlogs.map((blog) => blog._id.toString());
+
+        // Delete all comments on the user's blogs
+        const deleteAllBlogComments = await Comment.deleteMany({
+            $or: [{ blog: { $in: blogIds } }, { owner: id.trim() }],
+        });
+
+        // Delete all blogs owned by the user
+        const deleteAllBlogs = await Blog.deleteMany({ owner: id.trim() });
+
+        // Delete the user
+        await User.findByIdAndDelete(id.trim());
+
+        // Response with details of deletion
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    deletedBlogsCount: deleteAllBlogs.deletedCount,
+                    deletedBlogCommentsCount:
+                        deleteAllBlogComments.deletedCount,
+                },
+                "User and associated data deleted successfully"
+            )
+        );
+    } catch (error) {
+        throw new ApiError(
+            500,
+            error?.message || "server error while deleting the user"
+        );
+    }
+});
+
+const deleteBlogByModerator = asyncHandler(async (req, res) => {
+    const { id } = req.query;
+
+    if (!id) {
+        throw new ApiError(400, "blog is required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id.trim())) {
+        throw new ApiError(400, "Invalid id");
+    }
+
+    try {
+        const blog = await Blog.findById(id.trim());
+
+        if (!blog) {
+            throw new ApiError(404, "Blog not found");
+        }
+
+        await Comment.deleteMany({ blog: id.trim() });
+        await Blog.findByIdAndDelete(id.trim());
+
+        return res
+            .status(200)
+            .json(new ApiResponse(200, {}, "delete the blog successfully"));
+    } catch (error) {
+        throw new ApiError(
+            500,
+            error?.message || "server error while deleting the blog"
+        );
+    }
+});
 
 export {
     registerUser,
@@ -511,4 +663,7 @@ export {
     getUserInfo,
     getMember,
     getProfile,
+    changeRole,
+    deleteUser,
+    deleteBlogByModerator,
 };

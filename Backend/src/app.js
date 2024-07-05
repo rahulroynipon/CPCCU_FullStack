@@ -22,9 +22,11 @@ app.use(cookieParser());
 import userRouter from "./routes/user.route.js";
 import userBlog from "./routes/blog.route.js";
 import userComment from "./routes/comment.route.js";
+import userDashboard from "./routes/dashboard.route.js";
 
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/blogs", userBlog);
 app.use("/api/v1/comment", userComment);
+app.use("/api/v1/dashboard", userDashboard);
 
 export { app };
