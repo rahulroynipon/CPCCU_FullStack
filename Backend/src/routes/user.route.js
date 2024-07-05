@@ -2,7 +2,6 @@ import { Router } from "express";
 import { upload } from "./../middlewares/upload.middleware.js";
 import {
     getMember,
-    getProfile,
     getUserInfo,
     loginUser,
     logoutUser,
@@ -10,6 +9,7 @@ import {
     registerUser,
     updateAvatar,
     updateCoverImage,
+    getProfile,
 } from "../controllers/user.controller.js";
 import { verifyToken } from "../middlewares/Auth.middleware.js";
 

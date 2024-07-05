@@ -43,15 +43,99 @@ const userDataCollection = async (username, userId) => {
     }
 
     const profile = await User.aggregate([
-        {
-            $match: query,
-        },
+        { $match: query },
         {
             $lookup: {
                 from: "blogs",
                 localField: "_id",
                 foreignField: "owner",
                 as: "personalBlogs",
+            },
+        },
+        {
+            $unwind: {
+                path: "$personalBlogs",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $lookup: {
+                from: "comments",
+                localField: "personalBlogs._id",
+                foreignField: "blog",
+                as: "personalBlogs.comments",
+            },
+        },
+        {
+            $unwind: {
+                path: "$personalBlogs.comments",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "personalBlogs.comments.owner",
+                foreignField: "_id",
+                as: "personalBlogs.comments.commenter",
+            },
+        },
+        {
+            $unwind: {
+                path: "$personalBlogs.comments.commenter",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $group: {
+                _id: {
+                    userId: "$_id",
+                    blogId: "$personalBlogs._id",
+                },
+                username: { $first: "$username" },
+                email: { $first: "$email" },
+                fullname: { $first: "$fullname" },
+                avatar: { $first: "$avatar" },
+                coverImage: { $first: "$coverImage" },
+                uni_id: { $first: "$uni_id" },
+                batch: { $first: "$batch" },
+                blogContent: { $first: "$personalBlogs.content" },
+                blogCreatedAt: { $first: "$personalBlogs.createdAt" },
+                comments: {
+                    $push: {
+                        _id: "$personalBlogs.comments._id",
+                        content: "$personalBlogs.comments.content",
+                        createdAt: "$personalBlogs.comments.createdAt",
+                        commenter: {
+                            _id: "$personalBlogs.comments.commenter._id",
+                            username:
+                                "$personalBlogs.comments.commenter.username",
+                            fullname:
+                                "$personalBlogs.comments.commenter.fullname",
+                            avatar: "$personalBlogs.comments.commenter.avatar",
+                        },
+                    },
+                },
+            },
+        },
+        {
+            $group: {
+                _id: "$_id.userId",
+                username: { $first: "$username" },
+                email: { $first: "$email" },
+                fullname: { $first: "$fullname" },
+                avatar: { $first: "$avatar" },
+                coverImage: { $first: "$coverImage" },
+                uni_id: { $first: "$uni_id" },
+                batch: { $first: "$batch" },
+                personalBlogs: {
+                    $push: {
+                        _id: "$_id.blogId",
+                        content: "$blogContent",
+                        createdAt: "$blogCreatedAt",
+                        comments: "$comments",
+                    },
+                },
             },
         },
         {
@@ -63,7 +147,37 @@ const userDataCollection = async (username, userId) => {
                 coverImage: 1,
                 uni_id: 1,
                 batch: 1,
-                personalBlogs: 1,
+                personalBlogs: {
+                    $filter: {
+                        input: "$personalBlogs",
+                        as: "blog",
+                        cond: { $ne: ["$$blog", null] },
+                    },
+                },
+            },
+        },
+        {
+            $unwind: {
+                path: "$personalBlogs",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
+        {
+            $sort: {
+                "personalBlogs.createdAt": -1, // Sort blogs by createdAt descending
+            },
+        },
+        {
+            $group: {
+                _id: "$_id",
+                username: { $first: "$username" },
+                email: { $first: "$email" },
+                fullname: { $first: "$fullname" },
+                avatar: { $first: "$avatar" },
+                coverImage: { $first: "$coverImage" },
+                uni_id: { $first: "$uni_id" },
+                batch: { $first: "$batch" },
+                personalBlogs: { $push: "$personalBlogs" },
             },
         },
     ]);
@@ -149,24 +263,14 @@ const loginUser = asyncHandler(async (req, res) => {
         user?._id
     );
 
-    const loggedInUser = await User.findById(user?._id).select(
-        "-password -refreshToken"
-    );
+    const loggedInUser = await User.findById(user?._id).select("_id");
 
     return res
         .status(200)
         .cookie("accessToken", accessToken, options)
         .cookie("refreshToken", refreshToken, options)
         .json(
-            new ApiResponse(
-                200,
-                {
-                    user: loggedInUser,
-                    accessToken,
-                    refreshToken,
-                },
-                "User logged In Successfully"
-            )
+            new ApiResponse(200, loggedInUser, "User logged In Successfully")
         );
 });
 

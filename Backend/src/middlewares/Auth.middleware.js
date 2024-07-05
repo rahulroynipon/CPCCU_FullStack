@@ -33,4 +33,26 @@ const verifyToken = asyncHandler(async (req, res, next) => {
     }
 });
 
-export { verifyToken };
+const verifyAdmin = asyncHandler(async (req, res, next) => {
+    try {
+        if (req.user.roles.role.trim() !== "admin") {
+            throw new ApiError(401, "Unauthorized role");
+        }
+        next();
+    } catch (error) {
+        next(new ApiError(401, error?.message || "Invalid role"));
+    }
+});
+
+const verifyModerator = asyncHandler(async (req, res, next) => {
+    try {
+        const authRole = ["admin", "moderator"];
+        if (!authRole.includes(req.user.roles.role.trim())) {
+            throw new ApiError(401, "Unauthorized role");
+        }
+        next();
+    } catch (error) {
+        next(new ApiError(401, error?.message || "Invalid role"));
+    }
+});
+export { verifyToken, verifyAdmin, verifyModerator };
