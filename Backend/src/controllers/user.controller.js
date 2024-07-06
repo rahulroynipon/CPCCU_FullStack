@@ -196,7 +196,7 @@ const registerUser = asyncHandler(async (req, res) => {
     const { username, email, fullname, password, batch, uni_id } = req.body;
 
     if (
-        [username, email, fullname, password].some(
+        [username, email, fullname, password, batch, uni_id].some(
             (field) => field?.trim() === ""
         )
     ) {
@@ -216,15 +216,11 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
         fullname,
         password,
-        avatar: "",
-        coverImage: "",
         batch,
         uni_id,
     });
 
-    const createdUser = await User.findById(user._id).select(
-        "-password -refreshToken"
-    );
+    const createdUser = await User.findById(user._id).select("_id username");
 
     if (!createdUser) {
         throw new ApiError(
@@ -265,7 +261,7 @@ const loginUser = asyncHandler(async (req, res) => {
         user?._id
     );
 
-    const loggedInUser = await User.findById(user?._id).select("_id");
+    const loggedInUser = await User.findById(user?._id).select("_id username");
 
     return res
         .status(200)
@@ -407,38 +403,49 @@ const getMember = asyncHandler(async (req, res) => {
             throw new ApiError(400, "Role query parameter is required");
         }
 
-        const roles = ["admin", "moderator", "mentor", "member"];
-        const userRole = role.trim();
-        if (!roles.includes(userRole) && userRole != "all") {
-            throw new ApiError(400, "Invalid role provided");
-        }
-
+        const userRole = role.trim().toLowerCase();
         const selected = "username fullname email avatar roles";
-        let search = [{ "roles.role": userRole }];
-        let member = [];
+        let filter = {
+            search: [{ "roles.role": userRole }],
+            sort: { "roles.position": 1 },
+        };
 
-        if (userRole == "moderator") {
-            search = [{ "roles.role": "admin" }, { "roles.role": "moderator" }];
+        switch (userRole) {
+            case "admin":
+                break;
+
+            case "moderator":
+                filter.search = [
+                    { "roles.role": "admin" },
+                    { "roles.role": userRole },
+                ];
+                break;
+
+            case "mentor":
+                filter.sort = { "roles.position": -1 };
+                break;
+
+            case "member":
+                filter.sort = { createdAt: 1 };
+                break;
+
+            case "all":
+                filter.search = [{}];
+                filter.sort = { createdAt: 1 };
+                break;
+
+            default:
+                throw new ApiError(400, "Invalid role provided");
         }
 
-        if (userRole == "moderator") {
-            member = await User.find({
-                $or: search,
-            })
-                .select(selected)
-                .sort({ "roles.position": 1 });
-        } else if (userRole == "mentor") {
-            member = await User.find({
-                $or: search,
-            })
-                .select(selected)
-                .sort({ "roles.position": -1 });
-        } else if (userRole == "all") {
-            member = await User.find().select(selected);
-        } else {
-            member = await User.find({
-                $or: search,
-            }).select(selected);
+        const members = await User.find({
+            $or: filter.search,
+        })
+            .select(selected)
+            .sort(filter.sort);
+
+        if (!members.length) {
+            throw new ApiError(404, "No members found");
         }
 
         return res
@@ -446,130 +453,178 @@ const getMember = asyncHandler(async (req, res) => {
             .json(
                 new ApiResponse(
                     200,
-                    member,
+                    members,
                     `${role} data retrieved successfully`
                 )
             );
     } catch (error) {
-        throw new ApiError(500, "Failed to fetch member data");
+        throw new ApiError(
+            500,
+            error?.message || "Failed to fetch member data"
+        );
     }
 });
 
 const getUserInfo = asyncHandler(async (req, res) => {
-    const { username, id } = req.query;
+    try {
+        const { username, id } = req.query;
 
-    if (!username && !id) {
+        if (!username && !id) {
+            throw new ApiError(
+                400,
+                "Either username or id query parameter is required"
+            );
+        }
+
+        const profile = await userDataCollection(username, id);
+
+        if (!profile || profile.length === 0) {
+            throw new ApiError(404, "Profile not found");
+        }
+
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    profile[0],
+                    "Profile data retrieved successfully"
+                )
+            );
+    } catch (error) {
         throw new ApiError(
-            400,
-            "Either username or id query parameter is required"
+            500,
+            error?.message || "server error while fetching data"
         );
     }
-
-    const profile = await userDataCollection(username, id);
-
-    if (!profile || profile.length === 0) {
-        throw new ApiError(404, "Profile not found");
-    }
-
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                profile[0],
-                "Profile data retrieved successfully"
-            )
-        );
 });
 
 const getProfile = asyncHandler(async (req, res) => {
-    // Fetch profile data using userDataCollection function
-    const profile = await userDataCollection(req.user?.username, req.user?._id);
-
-    if (!profile || profile.length === 0) {
-        throw new ApiError(404, "Profile not found");
-    }
-
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                profile[0],
-                "Profile data retrieved successfully"
-            )
+    try {
+        // Fetch profile data using userDataCollection function
+        const profile = await userDataCollection(
+            req.user?.username,
+            req.user?._id
         );
+
+        if (!profile || profile.length === 0) {
+            throw new ApiError(404, "Profile not found");
+        }
+
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    profile[0],
+                    "Profile data retrieved successfully"
+                )
+            );
+    } catch (error) {
+        throw new ApiError(500, "server error while fetching data");
+    }
 });
 
 // admin and moderator controller start from here
 
 const changeRole = asyncHandler(async (req, res) => {
-    const { change } = req.query;
-    const { id, value } = req.body;
+    try {
+        const { id } = req.query;
+        const { change, value } = req.body;
 
-    if (!change || !id || !value) {
-        throw new ApiError(400, "query, id, and value are required");
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(id.trim())) {
-        throw new ApiError(400, "invalid id");
-    }
-
-    const existedUser = await User.findById(id.trim());
-
-    if (!existedUser) {
-        throw new ApiError(404, "user not found");
-    }
-
-    let updateValue = value.trim();
-
-    switch (change.trim()) {
-        case "role": {
-            if (
-                !["admin", "moderator", "mentor", "member"].includes(
-                    updateValue
-                )
-            ) {
-                throw new ApiError(401, "invalid role");
-            }
-            break;
+        if (!change || !id || !value) {
+            throw new ApiError(400, "id, change, and value are required");
         }
 
-        case "position": {
-            const x = Number(updateValue);
-            if (isNaN(x)) {
-                throw new ApiError(401, "invalid position");
-            }
-            updateValue = x;
-            break;
+        if (!mongoose.Types.ObjectId.isValid(id.trim())) {
+            throw new ApiError(400, "invalid id");
         }
 
-        case "positionName": {
-            // Add any additional validation if necessary
-            break;
+        const existedUser = await User.findById(id.trim());
+
+        if (!existedUser) {
+            throw new ApiError(404, "user not found");
         }
 
-        default:
-            throw new ApiError(400, "invalid change type");
+        const existedRole = ["admin", "moderator", "mentor", "member"];
+        let updatedValue;
+
+        switch (change.trim()) {
+            case "role":
+                updatedValue = value.trim();
+                if (!existedRole.includes(updatedValue)) {
+                    throw new ApiError(401, "invalid role");
+                }
+                break;
+            case "position":
+                if (Number.isNaN(Number(value))) {
+                    throw new ApiError(
+                        400,
+                        "invalid position, it must be a number"
+                    );
+                }
+
+                updatedValue = Number(value);
+                switch (existedUser?.roles?.role) {
+                    case "admin":
+                    case "moderator":
+                        if (updatedValue <= 0) {
+                            throw new ApiError(
+                                400,
+                                `invalid position for ${existedUser.roles.role}`
+                            );
+                        }
+                        break;
+                    case "mentor":
+                        if (updatedValue >= 0) {
+                            throw new ApiError(
+                                400,
+                                `invalid position for ${existedUser.roles.role}`
+                            );
+                        }
+                        break;
+                    case "member":
+                        if (updatedValue !== 0) {
+                            throw new ApiError(
+                                400,
+                                `invalid position for ${existedUser.roles.role}`
+                            );
+                        }
+                        break;
+                    default:
+                        throw new ApiError(400, "invalid user role");
+                }
+                break;
+            case "positionName":
+                updatedValue = value.trim();
+                break;
+            default:
+                throw new ApiError(400, "invalid change type");
+        }
+
+        const updateUser = await User.findByIdAndUpdate(
+            id.trim(),
+            { $set: { [`roles.${change.trim()}`]: updatedValue } },
+            { new: true }
+        ).select("username roles");
+
+        if (!updateUser) {
+            throw new ApiError(500, "failed to update user");
+        }
+
+        res.status(200).json(
+            new ApiResponse(
+                200,
+                updateUser,
+                `${change.trim()} changed successfully`
+            )
+        );
+    } catch (error) {
+        throw new ApiError(
+            500,
+            error?.message || "An unexpected error occurred"
+        );
     }
-
-    const updateUser = await User.findByIdAndUpdate(
-        id.trim(),
-        { $set: { [`roles.${change.trim()}`]: updateValue } },
-        { new: true }
-    ).select("username roles");
-
-    if (!updateUser) {
-        throw new ApiError(500, "failed to update user");
-    }
-
-    res.status(200).json(
-        new ApiResponse(
-            200,
-            updateUser,
-            `${change.trim()} changed successfully`
-        )
-    );
 });
 
 const deleteUser = asyncHandler(async (req, res) => {
