@@ -7,6 +7,10 @@ const blogSchema = new Schema(
             ref: "User",
             required: true,
         },
+        thumbnail: {
+            type: String,
+            required: true,
+        },
         content: {
             type: String,
             required: true,

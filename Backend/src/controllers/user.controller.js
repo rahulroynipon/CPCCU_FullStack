@@ -101,6 +101,7 @@ const userDataCollection = async (username, userId) => {
                 coverImage: { $first: "$coverImage" },
                 uni_id: { $first: "$uni_id" },
                 batch: { $first: "$batch" },
+                blogThumbnail: { $first: "$personalBlogs.thumbnail" },
                 blogContent: { $first: "$personalBlogs.content" },
                 blogCreatedAt: { $first: "$personalBlogs.createdAt" },
                 comments: {
@@ -133,6 +134,7 @@ const userDataCollection = async (username, userId) => {
                 personalBlogs: {
                     $push: {
                         _id: "$_id.blogId",
+                        thumbnail: "$blogThumbnail",
                         content: "$blogContent",
                         createdAt: "$blogCreatedAt",
                         comments: "$comments",
@@ -261,7 +263,9 @@ const loginUser = asyncHandler(async (req, res) => {
         user?._id
     );
 
-    const loggedInUser = await User.findById(user?._id).select("_id username");
+    const loggedInUser = await User.findById(user?._id).select(
+        "username avatar"
+    );
 
     return res
         .status(200)
@@ -395,7 +399,7 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 
 // public data controller start from here
 
-const getMember = asyncHandler(async (req, res) => {
+const getMember = asyncHandler(async (req, res, next) => {
     try {
         const { role } = req.query;
 
@@ -444,8 +448,8 @@ const getMember = asyncHandler(async (req, res) => {
             .select(selected)
             .sort(filter.sort);
 
-        if (!members.length) {
-            throw new ApiError(404, "No members found");
+        if (!members) {
+            throw new ApiError(500, "server site error");
         }
 
         return res
@@ -530,99 +534,91 @@ const getProfile = asyncHandler(async (req, res) => {
 const changeRole = asyncHandler(async (req, res) => {
     try {
         const { id } = req.query;
-        const { change, value } = req.body;
+        const { role, position, positionName } = req.body;
 
-        if (!change || !id || !value) {
-            throw new ApiError(400, "id, change, and value are required");
+        if (!id || !role || !position || !positionName) {
+            throw new ApiError(400, "All fields are required");
         }
 
         if (!mongoose.Types.ObjectId.isValid(id.trim())) {
-            throw new ApiError(400, "invalid id");
+            throw new ApiError(400, "Invalid id");
         }
 
         const existedUser = await User.findById(id.trim());
 
         if (!existedUser) {
-            throw new ApiError(404, "user not found");
+            throw new ApiError(404, "User not found");
         }
 
-        const existedRole = ["admin", "moderator", "mentor", "member"];
-        let updatedValue;
-
-        switch (change.trim()) {
-            case "role":
-                updatedValue = value.trim();
-                if (!existedRole.includes(updatedValue)) {
-                    throw new ApiError(401, "invalid role");
-                }
-                break;
-            case "position":
-                if (Number.isNaN(Number(value))) {
+        switch (role.trim()) {
+            case "admin":
+                if (position !== 1) {
                     throw new ApiError(
-                        400,
-                        "invalid position, it must be a number"
+                        401,
+                        "Invalid position for admin (must be 1)"
                     );
                 }
-
-                updatedValue = Number(value);
-                switch (existedUser?.roles?.role) {
-                    case "admin":
-                    case "moderator":
-                        if (updatedValue <= 0) {
-                            throw new ApiError(
-                                400,
-                                `invalid position for ${existedUser.roles.role}`
-                            );
-                        }
-                        break;
-                    case "mentor":
-                        if (updatedValue >= 0) {
-                            throw new ApiError(
-                                400,
-                                `invalid position for ${existedUser.roles.role}`
-                            );
-                        }
-                        break;
-                    case "member":
-                        if (updatedValue !== 0) {
-                            throw new ApiError(
-                                400,
-                                `invalid position for ${existedUser.roles.role}`
-                            );
-                        }
-                        break;
-                    default:
-                        throw new ApiError(400, "invalid user role");
+                break;
+            case "moderator":
+                if (position <= 1) {
+                    throw new ApiError(
+                        401,
+                        "Invalid position for moderator (must be > 1)"
+                    );
                 }
                 break;
-            case "positionName":
-                updatedValue = value.trim();
+            case "mentor":
+                if (position >= 0) {
+                    throw new ApiError(
+                        401,
+                        "Invalid position for mentor (must be < 0)"
+                    );
+                }
+                break;
+            case "member":
+                if (position !== 0) {
+                    throw new ApiError(
+                        401,
+                        "Invalid position for member (must be 0)"
+                    );
+                }
                 break;
             default:
-                throw new ApiError(400, "invalid change type");
+                throw new ApiError(401, "Invalid role");
         }
 
-        const updateUser = await User.findByIdAndUpdate(
-            id.trim(),
-            { $set: { [`roles.${change.trim()}`]: updatedValue } },
-            { new: true }
-        ).select("username roles");
+        const updateData = {
+            role: role.trim(),
+            position: position,
+            positionName: positionName, // Corrected to use positionName from req.body
+        };
 
-        if (!updateUser) {
-            throw new ApiError(500, "failed to update user");
+        const updatedUser = await User.findByIdAndUpdate(
+            id.trim(),
+            {
+                $set: { roles: updateData },
+            },
+            {
+                new: true,
+                select: "username roles", // Corrected to select username and roles
+            }
+        );
+
+        if (!updatedUser) {
+            throw new ApiError(404, "User not found after update");
         }
 
         res.status(200).json(
             new ApiResponse(
                 200,
-                updateUser,
-                `${change.trim()} changed successfully`
+                updatedUser,
+                `${role.trim()} changed successfully`
             )
         );
     } catch (error) {
         throw new ApiError(
-            500,
-            error?.message || "An unexpected error occurred"
+            error.statusCode || 500,
+            error.message || "An unexpected error occurred"
         );
     }
 });

@@ -3,34 +3,77 @@ import { Blog } from "../models/blog.model.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import fs from "fs";
 
 // secure blog section start from here
 const createBlog = asyncHandler(async (req, res) => {
-    const { content } = req.body;
+    let thumbnailLocalPath = null; // Initialize to null
 
-    if (!content || !content.trim()) {
-        throw new ApiError(400, "Content is missing");
+    try {
+        const { content } = req.body;
+        thumbnailLocalPath = req.file?.path;
+
+        if (!thumbnailLocalPath) {
+            throw new ApiError(400, "Thumbnail image file is missing");
+        }
+
+        if (!content || !content.trim()) {
+            if (fs.existsSync(thumbnailLocalPath)) {
+                fs.unlinkSync(thumbnailLocalPath);
+            }
+            throw new ApiError(400, "Content is missing");
+        }
+
+        const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
+
+        if (!thumbnail.url) {
+            if (fs.existsSync(thumbnailLocalPath)) {
+                fs.unlinkSync(thumbnailLocalPath);
+            }
+            throw new ApiError(400, "Error while uploading thumbnail");
+        }
+
+        const blog = await Blog.create({
+            owner: new mongoose.Types.ObjectId(req.user._id),
+            thumbnail: thumbnail.url,
+            content: content,
+        });
+
+        if (!blog) {
+            throw new ApiError(
+                500,
+                "Something went wrong while creating the blog"
+            );
+        }
+
+        return res
+            .status(201)
+            .json(new ApiResponse(200, blog, "Blog is created successfully"));
+    } catch (error) {
+        if (fs.existsSync(req.file?.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+        throw new ApiError(
+            500,
+            error.message || "Server error while creating blog"
+        );
     }
-
-    const blog = await Blog.create({
-        owner: new mongoose.Types.ObjectId(req.user._id),
-        content: content,
-    });
-
-    if (!blog) {
-        throw new ApiError(500, "Something went wrong while creating the blog");
-    }
-
-    return res
-        .status(201)
-        .json(new ApiResponse(200, blog, "Blog is created successfully"));
 });
 
 const updateBlog = asyncHandler(async (req, res) => {
+    const { id } = req.query;
+
     const { content } = req.body;
 
-    if (!content) {
-        throw new ApiError(400, "Update content is required");
+    if (!mongoose.Types.ObjectId.isValid(id.trim())) {
+        throw new ApiError(400, "Invalid blog id");
+    }
+
+    const existedBlog = await Blog.findById(id);
+
+    if (!existedBlog) {
+        throw new ApiError(404, "Blog not Found");
     }
 
     try {
@@ -87,50 +130,58 @@ const getBlog = asyncHandler(async (req, res) => {
             throw new ApiError(400, "Role query parameter is required");
         }
 
-        const roles = ["admin", "moderator", "mentor", "member"];
         const userRole = role.trim().toLowerCase();
 
-        if (!roles.includes(userRole) && userRole !== "all") {
-            throw new ApiError(400, "Invalid role provided");
+        let filter = {
+            path: "owner",
+            select: "username fullname avatar",
+            search: [{ "roles.role": userRole }],
+            sort: { createdAt: -1 },
+        };
+
+        switch (userRole) {
+            case "admin":
+            case "mentor":
+            case "member":
+                // No additional filtering needed
+                break;
+            case "moderator":
+                filter.search.push({ "roles.role": "admin" });
+                break;
+            case "all":
+                filter.search = [{}];
+                break;
+            default:
+                throw new ApiError(400, "Invalid role provided");
         }
 
-        let blogs = [];
-        const selected = "username fullname avatar";
-        let search = [{ "roles.role": userRole }];
+        let blogs = await Blog.find().populate({
+            path: filter.path,
+            match: { $or: filter.search },
+            select: filter.select,
+        });
 
-        if (userRole === "moderator") {
-            search = [{ "roles.role": "admin" }, { "roles.role": "moderator" }];
-        }
+        blogs = blogs.filter((blog) => blog.owner !== null);
 
-        if (userRole === "all") {
-            blogs = await Blog.find()
-                .populate({
-                    path: "owner",
-                    select: selected,
-                })
-                .sort({ createdAt: -1 });
-        } else {
-            blogs = await Blog.find()
-                .populate({
-                    path: "owner",
-                    match: { $or: search },
-                    select: selected,
-                })
-                .sort({ createdAt: -1 });
-
-            // Filter out blogs where owner is null
-            blogs = blogs.filter((blog) => blog.owner !== null);
-        }
-
-        res.status(200).json(
-            new ApiResponse(
-                200,
-                blogs,
-                `${role ? role : "All"} blogs retrieved successfully`
-            )
-        );
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(
+                    200,
+                    blogs,
+                    `${role ? role : "All"} blogs retrieved successfully`
+                )
+            );
     } catch (error) {
-        res.status(500).json(new ApiError(500, "Failed to fetch blogs"));
+        if (error instanceof ApiError) {
+            return res
+                .status(error.statusCode)
+                .json(new ApiResponse(error.statusCode, null, error.message));
+        } else {
+            return res
+                .status(500)
+                .json(new ApiResponse(500, null, "Failed to fetch blogs"));
+        }
     }
 });
 

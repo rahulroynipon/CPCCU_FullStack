@@ -55,10 +55,12 @@ const userSchema = new Schema(
             type: String,
         },
         batch: {
-            type: Number,
+            type: String,
+            required: true,
         },
         uni_id: {
-            type: Number,
+            type: String,
+            required: true,
         },
         roles: {
             type: roleSchema,

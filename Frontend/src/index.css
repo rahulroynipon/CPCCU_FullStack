@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.padding-x {
+  @apply px-5 md:px-7 lg:px-9 xxl:px-12;
+}
+
+.padding-y {
+  @apply py-2 lg:py-2 xxl:py-4;
+}
+
+.width {
+  @apply max-w-full lg:max-w-[1350px] xxl:max-w-[1600px] mx-auto;
+}
+
+.trans {
+  @apply transition-all duration-500;
+}

@@ -8,11 +8,14 @@ import {
     getBlog,
     updateBlog,
 } from "../controllers/blog.controller.js";
+import { upload } from "../middlewares/upload.middleware.js";
 
 const router = Router();
 
 // secure blog
-router.route("/create").post(verifyToken, createBlog);
+router
+    .route("/create")
+    .post(verifyToken, upload.single("thumbnail"), createBlog);
 router.route("/update").patch(verifyToken, verifyBlogOwner, updateBlog);
 router.route("/delete").delete(verifyToken, verifyBlogOwner, deleteBlog);
 
