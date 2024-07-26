@@ -8,3 +8,12 @@
     -ex- Md Shoriful Islam Ashiq => [mdshorifulislamashiq]
 
 
+# CHANGE-02
+
+## user database er moddhe tar social profile 
+- LinkedIn required 
+- GitHub required 
+- Facebook 
+- Twitter 
+- YouTube 
+- blog
